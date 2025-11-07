@@ -1,0 +1,29 @@
+---
+title: "Omodolapo Nurudeen"
+format:
+  html:
+    theme: minty
+    css: styles.css
+---
+
+::: columns
+::: {.column width="50%"}
+![My Photo](IMG_2910.jpeg){width=100%}
+:::
+
+::: {.column width="50%" style="padding-left: 40px;"}
+ 
+
+
+Hi there! — I’m Omodolapo Nurudeen, a first-year BME PhD student at *Johns Hopkins University*.  
+My research lies at the intersection of computational genomics and neuroscience.  
+I explore how emerging computational and statistical tools can deepen our understanding of the brain.
+
+###  Fun Facts
+- When I’m not doing schoolwork, you’ll probably find me exploring a new fantasy world through books or movies.  
+- I love crafting**, and I’m a huge tea enthusiasts, any type of tea, anytime ☕  
+
+[![GitHub](https://img.shields.io/badge/GitHub-black?logo=github)](https://github.com/Donur1)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?logo=linkedin)](https://www.linkedin.com/in/omodolapo-nurudeen/)
+:::
+:::

@@ -1,0 +1,310 @@
+---
+title: "Sample Analysis"
+format: html
+execute:
+  echo: true
+---
+
+The National Health and Nutrition Examination Survey (NHANES) is a nationally
+representative program that combines interviews and standardized examinations to characterize the health and nutritional status of the U.S. population. NHANES links survey records to subsequent mortality follow-up so it is a good database to explore how demographic, behavioral, and clinical factors can relate to survival.
+It is also important to understand how people 40 and older are at risk for chronic disease and thus death. This analysis will use the NHANES 2003–2004 cycle to build a predictive models mortality status among participants aged 40 and above. The intended audience are health data analysts and public health researchers to interested in understanding and make some predictions on patient risk based on available health data.
+
+The goal of this analyisis is to explore how demographic and clinical factors relate to mortality among NHANES participants aged 40 and above. 
+I will use  histograms, boxplots, and scatterplots to identify potential trends and patterns in health indicators such as BMI, blood pressure, and diabetes status. 
+I wll build Linear Discriminant Analysis (LDA) and Quadratic Discriminant Analysis (QDA) models to predict mortality status and evaluate which method provides better classification performance and better predictive understanding of mortality risk in older adults.
+
+
+![NHANES Logo](https://www.cdc.gov/nchs/media/images/2024/10/NHANES-Trademark.png){fig-align="center" width="200px"}
+
+
+::: callout-tip
+ **Note:** NHANES is a continuous cross-sectional survey that combines interviews and physical examinations to assess the health and nutritional status of adults and children in the United States.
+:::
+
+
+```{r}
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+
+
+load('/Users/omodolaponurudeene/Desktop/fall 2025/Statistical Programming/Homework 1_Part2/nhanes2003-2004.Rda')
+
+numeric_value <- c("RIDAGEYR", "BMXWAIST", "BPXDI1", "LBXRDW", "BMXBMI", "BPXSY1")
+
+nhanes2003_2004 <- nhanes2003_2004 %>%
+  mutate(across(all_of(numeric_value), ~ as.numeric(as.character(.))))
+
+nhanes2003_2004 <- nhanes2003_2004 %>%
+  filter(RIDAGEYR >= 40)
+
+nhas_subset <- nhanes2003_2004 %>%
+    select(
+        RIAGENDR,
+        HSD010,
+        DIQ010,
+        MCQ010,
+        MCQ160A,
+        BPQ060,
+        BMXBMI,
+        BMXWAIST,
+        BPXSY1,
+        BPXDI1,
+        mortstat
+    )
+
+categorical_vars <- c("RIAGENDR", "HSD010", "DIQ010", "MCQ010", "MCQ160A", "BPQ060")
+
+nhas_subset[categorical_vars] <- lapply(nhas_subset[categorical_vars], function(x) {
+    x[x == "9"] <- NA
+    droplevels(x)
+})
+```
+
+
+Variable Dictionary
+
+| Variable     | Description                                                                                                                                           | Type        | Missing Value Variable |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------------- |
+| **RIAGENDR** | Participant gender (1 = Male, 2 = Female)                                                                                                             | Categorical | .              |
+| **HSD010**   | Highest education level attained (1 = Less than 9th grade; 2 = 9–11th grade; 3 = High school/GED; 4 = Some college/AA; 5 = College graduate or above) | Categorical | 9              |
+| **DIQ010**   | Doctor told you have diabetes (1 = Yes, 2 = No)                                                                                                       | Categorical | 9              |
+| **MCQ010**   | Ever been told you had asthma (1 = Yes, 2 = No)                                                                                                       | Categorical | 9              |
+| **MCQ160A**  | Doctor ever said you had arthritis (1 = Yes, 2 = No)                                                                                                  | Categorical | 9              |
+| **BPQ060**   | Ever had blood cholesterol checked (1 = Yes, 2 = No)                                                                                                  | Categorical | 9              |
+| **BMXBMI**   | Body Mass Index (kg/m²)                                                                                                                               | Numeric     | .              |
+| **BMXWAIST** | Waist circumference (cm)                                                                                                                              | Numeric     | .              |
+| **BPXSY1**   | Systolic blood pressure (1st reading, mm Hg)                                                                                                          | Numeric     | .              |
+| **BPXDI1**   | Diastolic blood pressure (1st reading, mm Hg)                                                                                                         | Numeric     | .              |
+
+
+
+```{r}
+#Droping NAs
+nhas_subset <- tidyr::drop_na(nhas_subset)
+
+#Sumamrizing the mean, median, mix and max of the dataset
+nhas_subset %>%
+  summarise(across(where(is.numeric), list(
+    min = min,
+    mean = mean,
+    median = median,
+    max = max
+  ), na.rm = TRUE))
+str(nhas_subset)
+
+
+
+#Some columns have value 9 to represent missing so dropping that as well
+nhas_subset[categorical_vars] <- lapply(nhas_subset[categorical_vars], function(x) {
+    x[x == "9"] <- NA
+    droplevels(x)
+})
+
+
+
+#Explore some of the important predictors using ggplots 
+num_x <- "BMXBMI"
+num_y <- "BPXSY1"
+cat_g <- "RIAGENDR"
+cat_f <- "DIQ010"
+
+
+# Histogram (geom_histogram)
+ggplot(nhas_subset, aes_string(x = num_x)) +
+    geom_histogram(bins = 30) +
+    labs(
+        title = paste("Distribution of", num_x),
+        subtitle = "Basic histogram of a numeric variable",
+        x = num_x, y = "Count",
+        caption = "Source: NHAS"
+    )
+
+# Plot 2: Boxplot (geom_boxplot) 
+ggplot(nhas_subset, aes_string(x = cat_g, y = num_x)) +
+    geom_boxplot() +
+    labs(
+        title = paste(num_x, "across", cat_g),
+        subtitle = "Group-wise spread and median",
+        x = cat_g, y = num_x,
+        caption = "Source: NHAS"
+    )
+
+# Plot 3: Scatter with smoother + faceting (geom_point, geom_smooth, facet_wrap)
+ggplot(nhas_subset, aes_string(x = num_x, y = num_y)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(se = FALSE, method = "loess") +
+    facet_wrap(as.formula(paste0("~", cat_f))) +
+    labs(
+        title = paste(num_y, "vs", num_x),
+        subtitle = paste("Faceted by", cat_f, "with LOESS smoother"),
+        x = num_x, y = num_y,
+        caption = "Source: NHAS"
+    )
+
+```
+
+```{r}
+
+# Analysis
+nhas <- nhas_subset
+
+str(nhas)
+set.seed(123)
+n <- nrow(nhas)
+train_idx <- sample(seq_len(n), size = 0.8 * n)
+train.set <- nhas[train_idx, ]
+test.set <- nhas[-train_idx, ]
+
+
+
+#Split into training and test set
+library(rsample)
+split <- initial_split(nhas, prop = 0.8, strata = mortstat)
+train.set <- training(split)
+test.set <- testing(split)
+
+dim(test.set)
+dim(train.set)
+
+```
+
+
+::: callout-note
+### Introduction to LDA and QDA
+Both **Linear Discriminant Analysis (LDA)** and **Quadratic Discriminant Analysis (QDA)** are supervised classification techniques that assume the data for each class follow a multivariate normal distribution.
+
+- **LDA** assumes that all classes share the same covariance matrix, leading to **linear decision boundaries**.
+- **QDA** relaxes that assumption, allowing each class to have its own covariance structure, producing **nonlinear decision boundaries**.
+
+These methods are often used to model relationships between continuous predictors and categorical outcomes, making them ideal for mortality classification tasks like this analysis.
+:::
+
+
+
+```{r}
+# Run linear discriminate model
+library(MASS)
+library(caret)
+
+summary(train.set)
+summary(test.set)
+
+train.set %>%
+    group_by(mortstat) %>%
+    summarise(across(everything(), ~ length(unique(.)))) %>%
+    print()
+
+lda.fit <- lda(mortstat ~ ., data = train.set)
+lda.pred <- predict(lda.fit, newdata = test.set)
+probs <- lda.pred$posterior[, "1"]
+
+
+
+#use multiple cutoffs to see which gives best sensitivity vs specificity
+cutoffs <- c(0.4, 0.5, 0.6)
+
+for (c in cutoffs) {
+    cat("\n--- Cutoff:", c, "---\n")
+    lda.class <- ifelse(probs > c, 1, 0)
+
+    cm <- confusionMatrix(
+        factor(lda.class),
+        factor(test.set$mortstat),
+        positive = "1"
+    )
+
+    print(cm)
+}
+```
+
+```{r}
+
+lda.class <- ifelse(probs > 0.3, 1, 0)
+
+cm_lda <- confusionMatrix(
+    factor(lda.class),
+    factor(test.set$mortstat),
+    positive = "1"
+)
+cm_lda
+
+table(lda.class, test.set$mortstat)
+mean(lda.class != test.set$mortstat)
+
+```
+
+::: {.column-margin}
+I tested several cutoffs (0.4, 0.5, 0.6) for LDA and inspected sensitivity/specificity.
+I chose a final cutoff = 0.3 to prioritize recall for class "1" (mortality).
+:::
+
+```{r}
+# Fit QDA
+qda.fit <- qda(mortstat ~ ., data = train.set)
+qda.pred <- predict(qda.fit, newdata = test.set)
+
+# Use cutoff = 0.3
+qda.probs <- qda.pred$posterior[, "1"]
+qda.class <- ifelse(qda.probs > 0.3, 1, 0)
+
+
+cm_qda <- confusionMatrix(
+    factor(qda.class, levels = c(0, 1)),
+    factor(test.set$mortstat, levels = c(0, 1)),
+    positive = "1"
+)
+cm_qda
+
+
+mean(qda.class != test.set$mortstat)
+
+```
+
+Summary
+
+Based on this models, the best in class model for Discriminant analysis is LDA at cutoff of 0.3. It achieves the best trade-off between sensitivity and specificity. It also has a better test error(21%) than QDA(30%). However, LDA provided the best tradeoff between sensitivity and specificity. This suggests that linear separation in feature space may best capture mortality risk patterns among older adults
+
+
+| Model   | Cutoff | Accuracy | Sensitivity | Specificity | Test Error |
+| ------- | ------ | -------- | ----------- | ----------- | ---------- |
+| **LDA** | 0.5    | 83.8%    | 17.3%       | 97.5%       | 16.2%      |
+| **LDA** | 0.3    | 77.0%    | 32.0%       | 86.3%       | 23.0%      |
+| **QDA** | 0.3    | 72.2%    | 42.7%       | 78.3%       | 27.8%      |
+
+
+
+#Reference
+@misc{nhanes2003_2004,
+  title        = {National Health and Nutrition Examination Survey (NHANES) 2003–2004},
+  author       = {{Centers for Disease Control and Prevention (CDC)}},
+  year         = {2004},
+  url          = {https://wwwn.cdc.gov/nchs/nhanes/search/datapage.aspx?Component=Examination&CycleBeginYear=2003},
+  note         = {Accessed November 2025},
+}
+
+@manual{mass2024,
+  title        = {MASS: Modern Applied Statistics with S},
+  author       = {Venables, W. N. and Ripley, B. D.},
+  year         = {2024},
+  note         = {R package version 7.3-60},
+  url          = {https://cran.r-project.org/web/packages/MASS/index.html}
+}
+
+@article{natureRNA2024,
+  title        = {RNA-centric methods reveal the complex landscape of RNA function and regulation},
+  author       = {Nature Reviews Methods Primers Editors},
+  journal      = {Nature Reviews Methods Primers},
+  year         = {2024},
+  volume       = {4},
+  number       = {1},
+  pages        = {46},
+  url          = {https://www.nature.com/articles/s43586-024-00346-y}
+}
+
+
+## Functions Used
+
+**dplyr:** `select()`, `mutate()`, `filter()`, `%>%`, `summarise()`  
+**ggplot2:** `geom_histogram()`, `geom_boxplot()`, `geom_point()`, `geom_smooth()`, `facet_wrap()`
